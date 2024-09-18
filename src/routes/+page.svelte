@@ -8,10 +8,10 @@
     let content = "";
 
     $: {
-        updateBlob(content);
+        updateBlob(content, leftHanded);
     }
 
-    async function updateBlob(contentx) {
+    async function updateBlob(contentx, left) {
         if (contentx == "") return;
         let newDoc = await PDFDocument.create();
         let oldDoc = await PDFDocument.load(contentx);
@@ -25,7 +25,7 @@
 
             lastPage.drawPage(preamble, {
                 ...preambleDims,
-                x: leftHanded ? PageSizes.A4[1] / 2 : 0,
+                x: left ? PageSizes.A4[1] / 2 : 0,
                 y: 0,
             });
         }
