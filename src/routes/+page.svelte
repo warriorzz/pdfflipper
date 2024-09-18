@@ -3,32 +3,50 @@
 
     let src = "";
     let leftHanded = false;
+    let includeGraph = false;
     let name = "";
     let a;
 
     async function upload(e) {
         if (e.target.files[0]) {
-            let content = await e.target.files[0].bytes();
+            let file = e.target.files[0];
+            let content = await file.arrayBuffer();
             name = e.target.files[0].name;
 
             let newDoc = await PDFDocument.create();
             let oldDoc = await PDFDocument.load(content);
+            
+            // load static graph.pdf page
+            const response = await fetch("/graph.pdf");
+            const arrayBuffer = await response.arrayBuffer();
+            let graph = await PDFDocument.load(arrayBuffer);
 
             for (let i = 0; i < oldDoc.getPages().length; i++) {
                 let page = oldDoc.getPages()[i];
                 let lastPage = newDoc.addPage([
-                    PageSizes.A4[1],
-                    PageSizes.A4[0],
+                    PageSizes.A3[1],
+                    PageSizes.A3[0],
                 ]);
 
                 const preamble = await newDoc.embedPage(page);
-                const preambleDims = preamble.scale(0.7);
+                const preambleDims = preamble.scale(1);
 
                 lastPage.drawPage(preamble, {
                     ...preambleDims,
-                    x: leftHanded ? PageSizes.A4[1] / 2 : 0,
+                    x: leftHanded ? PageSizes.A3[1] / 2 : 0,
                     y: 0,
                 });
+
+                if (includeGraph) {
+                    const graphPage = await newDoc.embedPage(graph.getPages()[0]);
+                    const graphDims = graphPage.scale(1);
+
+                    lastPage.drawPage(graphPage, {
+                        ...graphDims,
+                        x: leftHanded ? 0 : PageSizes.A3[1] / 2,
+                        y: 0,
+                    });
+                }
             }
             src = await newDoc.saveAsBase64({ dataUri: true });
         }
@@ -59,6 +77,8 @@
     >
     <input id="lefthand" bind:checked={leftHanded} type="checkbox" />
     <span>Left Handed</span>
+    <input id="graph" bind:checked={includeGraph} type="checkbox" />
+    <span>Include Graphing Paper</span>
 </div>
 
 <iframe title="pdf" {src}></iframe>
