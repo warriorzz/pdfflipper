@@ -5,32 +5,41 @@
     let leftHanded = false;
     let name = "";
     let a;
+    let content = "";
+
+    $: {
+        updateBlob(content);
+    }
+
+    async function updateBlob(contentx) {
+        if (contentx == "") return;
+        let newDoc = await PDFDocument.create();
+        let oldDoc = await PDFDocument.load(contentx);
+
+        for (let i = 0; i < oldDoc.getPages().length; i++) {
+            let page = oldDoc.getPages()[i];
+            let lastPage = newDoc.addPage([PageSizes.A4[1], PageSizes.A4[0]]);
+
+            const preamble = await newDoc.embedPage(page);
+            const preambleDims = preamble.scale(0.7);
+
+            lastPage.drawPage(preamble, {
+                ...preambleDims,
+                x: leftHanded ? PageSizes.A4[1] / 2 : 0,
+                y: 0,
+            });
+        }
+        src = await newDoc.saveAsBase64({ dataUri: true });
+    }
 
     async function upload(e) {
         if (e.target.files[0]) {
-            let content = await e.target.files[0].bytes();
             name = e.target.files[0].name;
-
-            let newDoc = await PDFDocument.create();
-            let oldDoc = await PDFDocument.load(content);
-
-            for (let i = 0; i < oldDoc.getPages().length; i++) {
-                let page = oldDoc.getPages()[i];
-                let lastPage = newDoc.addPage([
-                    PageSizes.A4[1],
-                    PageSizes.A4[0],
-                ]);
-
-                const preamble = await newDoc.embedPage(page);
-                const preambleDims = preamble.scale(0.7);
-
-                lastPage.drawPage(preamble, {
-                    ...preambleDims,
-                    x: leftHanded ? PageSizes.A4[1] / 2 : 0,
-                    y: 0,
-                });
-            }
-            src = await newDoc.saveAsBase64({ dataUri: true });
+            let reader = new FileReader();
+            reader.onload = (e) => {
+                content = e.target.result;
+            };
+            reader.readAsArrayBuffer(e.target.files[0]);
         }
     }
 
