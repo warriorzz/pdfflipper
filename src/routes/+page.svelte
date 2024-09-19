@@ -9,14 +9,14 @@
     let content = "";
 
     $: {
-        updateBlob(content, leftHanded);
+        updateBlob(content, leftHanded, includeGraph);
     }
 
-    async function updateBlob(contentx, left) {
+    async function updateBlob(contentx, left, graphing) {
         if (contentx == "") return;
         let newDoc = await PDFDocument.create();
         let oldDoc = await PDFDocument.load(contentx);
-      
+
         // load static graph.pdf page
         const response = await fetch("/graph.pdf");
         const arrayBuffer = await response.arrayBuffer();
@@ -34,16 +34,16 @@
                 x: left ? PageSizes.A4[1] / 2 : 0,
                 y: 0,
             });
-          
-            if (includeGraph) {
-                 const graphPage = await newDoc.embedPage(graph.getPages()[0]);
-                 const graphDims = graphPage.scale(0.7071);
 
-                 lastPage.drawPage(graphPage, {
-                      ...graphDims,
-                      x: leftHanded ? 0 : PageSizes.A4[1] / 2,
-                      y: 0,
-                  });
+            if (graphing) {
+                const graphPage = await newDoc.embedPage(graph.getPages()[0]);
+                const graphDims = graphPage.scale(0.7071);
+
+                lastPage.drawPage(graphPage, {
+                    ...graphDims,
+                    x: leftHanded ? 0 : PageSizes.A4[1] / 2,
+                    y: 0,
+                });
             }
         }
         src = await newDoc.saveAsBase64({ dataUri: true });
