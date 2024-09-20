@@ -7,9 +7,17 @@
     let name = "";
     let a;
     let content = "";
+    let progress = -1;
+
+    let error = true;
 
     $: {
-        updateBlob(content, leftHanded, includeGraph);
+        try {
+            error = false;
+            updateBlob(content, leftHanded, includeGraph);
+        } catch (e) {
+            error = true;
+        }
     }
 
     async function updateBlob(contentx, left, graphing) {
@@ -22,8 +30,12 @@
         const arrayBuffer = await response.arrayBuffer();
         let graph = await PDFDocument.load(arrayBuffer);
 
-        for (let i = 0; i < oldDoc.getPages().length; i++) {
+        let pages = oldDoc.getPages().length;
+        for (let i = 0; i < pages; i++) {
             let page = oldDoc.getPages()[i];
+
+            // let { width, height } = page.getSize();
+
             let lastPage = newDoc.addPage([PageSizes.A4[1], PageSizes.A4[0]]);
 
             const preamble = await newDoc.embedPage(page);
@@ -45,8 +57,14 @@
                     y: 0,
                 });
             }
+
+            progress = Math.floor(((i + 1) / pages) * 100);
         }
-        src = await newDoc.saveAsBase64({ dataUri: true });
+        let bytes = new Uint8Array(await newDoc.save());
+        let blob = new Blob([bytes], { type: "application/pdf" });
+        src = URL.createObjectURL(blob);
+
+        progress = -1;
     }
 
     async function upload(e) {
@@ -66,7 +84,7 @@
 </script>
 
 <h1>PDF Flipper</h1>
-<form>
+<div class="button-bar">
     <input
         type="file"
         id="file"
@@ -75,8 +93,6 @@
             upload(e);
         }}
     />
-</form>
-<div id="downloaddiv">
     <button
         id="button"
         on:click={(e) => {
@@ -84,13 +100,29 @@
         }}>Download</button
     >
     <input id="lefthand" bind:checked={leftHanded} type="checkbox" />
-    <span>Left Handed</span>
+    <span style="margin-top: auto; margin-bottom: auto; margin-right: 20px"
+        >Left Handed</span
+    >
     <input id="graph" bind:checked={includeGraph} type="checkbox" />
-    <span>Include Graphing Paper</span>
+    <span style="margin-top: auto; margin-bottom: auto"
+        >Include Graphing Paper</span
+    >
 </div>
-
-<iframe title="pdf" {src}></iframe>
-<a bind:this={a} id="download" href={src} />
+{#if progress != -1}
+    <p>Processing... {progress}%</p>
+{/if}
+{#if src != ""}
+    <iframe title="pdf" {src} type="application/pdf"></iframe>
+{/if}
+<a
+    style="padding: 0; margin: 0; width: 0;"
+    bind:this={a}
+    id="download"
+    href={src}
+/>
+{#if error}
+    <p>There was an error. Please try again (with a different file).</p>
+{/if}
 
 <style>
     :global(*) {
@@ -111,7 +143,8 @@
         color: lightgray;
     }
 
-    span {
+    span,
+    p {
         color: lightgray;
         padding: 0;
         margin: 0;
@@ -122,5 +155,11 @@
         margin: 0;
         width: 100%;
         height: 60vh;
+    }
+
+    .button-bar {
+        display: flex;
+        flex-width: 1;
+        align-content: center;
     }
 </style>
