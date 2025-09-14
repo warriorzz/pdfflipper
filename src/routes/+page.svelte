@@ -1,5 +1,12 @@
 <script lang="ts">
-    import { PDFDocument, PageSizes } from "pdf-lib";
+    import {
+        PDFAnnotation,
+        PDFDocument,
+        PDFObject,
+        PageSizes,
+        degrees,
+    } from "pdf-lib";
+    import { fade } from "svelte/transition";
 
     let src = "";
     let leftHanded = false;
@@ -20,47 +27,54 @@
         }
     }
 
-    async function updateBlob(contentx, left, graphing) {
-        if (contentx == "") return;
-        let newDoc = await PDFDocument.create();
-        let oldDoc = await PDFDocument.load(contentx);
-
-        // load static graph.pdf page
+    async function flip(oldDoc: PDFDocument, left: boolean, graphing: boolean) {
         const response = await fetch("/graph.pdf");
         const arrayBuffer = await response.arrayBuffer();
         let graph = await PDFDocument.load(arrayBuffer);
 
         let pages = oldDoc.getPages().length;
         for (let i = 0; i < pages; i++) {
-            let page = oldDoc.getPages()[i];
+            let page = oldDoc.getPage(i);
+            let w = page.getWidth();
+            let h = page.getHeight();
+            let scale = w / h;
+            page.scale(scale, scale);
+            page.setSize(h, w);
+            if (left) {
+                page.translateContent(h / 2, 0);
+                /*page.node
+                    .Annots()
+                    ?.asArray()
+                    .forEach((ann) => {
+                        console.log(ann.toString());
 
-            // let { width, height } = page.getSize();
-
-            let lastPage = newDoc.addPage([PageSizes.A4[1], PageSizes.A4[0]]);
-
-            const preamble = await newDoc.embedPage(page);
-            const preambleDims = preamble.scale(0.7071);
-
-            lastPage.drawPage(preamble, {
-                ...preambleDims,
-                x: left ? PageSizes.A4[1] / 2 : 0,
-                y: 0,
-            });
-
+                        //console.log((ann as PDFAnnotation).dict.entries());
+                        });*/
+            }
             if (graphing) {
-                const graphPage = await newDoc.embedPage(graph.getPages()[0]);
-                const graphDims = graphPage.scale(0.7071);
+                const graphPage = await oldDoc.embedPage(graph.getPages()[0]);
+                const graphDims = graphPage.scale(1);
 
-                lastPage.drawPage(graphPage, {
+                page.drawPage(graphPage, {
                     ...graphDims,
-                    x: leftHanded ? 0 : PageSizes.A4[1] / 2,
+                    x: left ? -w : w,
                     y: 0,
                 });
             }
-
-            progress = Math.floor(((i + 1) / pages) * 100);
+            progress = 10 + ((i + 1) / pages) * 80;
         }
-        let bytes = new Uint8Array(await newDoc.save());
+
+        return oldDoc;
+    }
+
+    async function updateBlob(contentx, left: boolean, graphing: boolean) {
+        if (contentx == "") return;
+        let doc = await PDFDocument.load(contentx);
+        progress = 10;
+        let oldDoc = await flip(doc, left, graphing);
+
+        let bytes = new Uint8Array(await oldDoc.save());
+        progress = 100;
         let blob = new Blob([bytes], { type: "application/pdf" });
         src = URL.createObjectURL(blob);
 
@@ -75,6 +89,8 @@
                 content = e.target.result;
             };
             reader.readAsArrayBuffer(e.target.files[0]);
+        } else {
+            src = "";
         }
     }
 
@@ -83,7 +99,25 @@
     }
 </script>
 
-<h1>PDF Flipper</h1>
+<h1 style="margin-top: 0; padding-top: 0">PDF Flipper</h1>
+
+<div style="margin-left: 25px; margin-bottom: 0; padding-bottom: 0">
+    <input id="lefthand" bind:checked={leftHanded} type="checkbox" />
+    <span style="margin-top: auto; margin-bottom: auto; margin-right: 20px"
+        >Left Handed</span
+    >
+    <a
+        style="padding: 0; margin: 0; width: 0;"
+        bind:this={a}
+        id="download"
+        href={src}>.</a
+    ><br />
+
+    <input id="graph" bind:checked={includeGraph} type="checkbox" />
+    <span style="margin-top: auto; margin-bottom: auto"
+        >Include Graphing Paper</span
+    >
+</div>
 <div class="button-bar">
     <input
         type="file"
@@ -97,29 +131,39 @@
         id="button"
         on:click={(e) => {
             download();
-        }}>Download</button
-    >
-    <input id="lefthand" bind:checked={leftHanded} type="checkbox" />
-    <span style="margin-top: auto; margin-bottom: auto; margin-right: 20px"
-        >Left Handed</span
-    >
-    <input id="graph" bind:checked={includeGraph} type="checkbox" />
-    <span style="margin-top: auto; margin-bottom: auto"
-        >Include Graphing Paper</span
+        }}><h2 style="font-color: #0d1117">Download</h2></button
     >
 </div>
-{#if progress != -1}
-    <p>Processing... {progress}%</p>
-{/if}
-{#if src != ""}
-    <iframe title="pdf" {src} type="application/pdf"></iframe>
-{/if}
-<a
-    style="padding: 0; margin: 0; width: 0;"
-    bind:this={a}
-    id="download"
-    href={src}
-/>
+
+<div
+    style="position: relative
+        ;margin-left: 30px;
+        width: 80vh;
+        height: 60vh; max-width: 100%"
+>
+    {#if src != ""}
+        <iframe
+            style="position: absolute; x: 0; y: 0"
+            title="pdf"
+            {src}
+            type="application/pdf"
+        ></iframe>
+    {/if}
+    {#if progress != -1}
+        <div
+            style="position: absolute; x: 0; y: 0;margin: 3px; padding: 0; height: 100%; width: 100%;backdrop-filter: blur(5px); background: rgba(0,0,0,.4);"
+            in:fade={{ duration: 200 }}
+            out:fade={{ duration: 200 }}
+        >
+            <h5
+                style="margin: 0; padding: 0; background: transparent; color: white; text-align: center; height: 100%; width: 100%;
+                position: relative; top: 50%"
+            >
+                Processing... {Math.floor(progress)}%
+            </h5>
+        </div>
+    {/if}
+</div>
 {#if error}
     <p>There was an error. Please try again (with a different file).</p>
 {/if}
@@ -129,17 +173,22 @@
         background-color: #0d1117;
         padding: 10px;
         margin: 10px;
+        font-family:
+            -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+            Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
     }
 
     h1 {
         font-size: 32px;
         color: lightgray;
-        border-bottom: 1px solid white;
+        border-bottom: 2px solid white;
+        border-radius: 3px;
     }
 
     button,
     input[type="file"] {
         border: 3px solid #743ad5;
+        border-radius: 10px;
         color: lightgray;
     }
 
@@ -154,12 +203,27 @@
         padding: 0;
         margin: 0;
         width: 100%;
-        height: 60vh;
+        height: 100%;
     }
 
     .button-bar {
         display: flex;
-        flex-width: 1;
+        flex-grow: 1;
         align-content: center;
+    }
+
+    a,
+    a:visited,
+    a:hover,
+    a:active {
+        color: #0d1117;
+    }
+
+    h2 {
+        font-size: 14px;
+        margin: 0;
+        padding: 0;
+        color: white;
+        font-weight: 600;
     }
 </style>
