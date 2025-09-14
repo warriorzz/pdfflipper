@@ -11,6 +11,7 @@
     let src = "";
     let leftHanded = false;
     let includeGraph = false;
+    let keepOriginal = false;
     let name = "";
     let a;
     let content = "";
@@ -21,13 +22,18 @@
     $: {
         try {
             error = false;
-            updateBlob(content, leftHanded, includeGraph);
+            updateBlob(content, leftHanded, includeGraph, keepOriginal);
         } catch (e) {
             error = true;
         }
     }
 
-    async function flip(oldDoc: PDFDocument, left: boolean, graphing: boolean) {
+    async function flip(
+        oldDoc: PDFDocument,
+        left: boolean,
+        graphing: boolean,
+        original: boolean,
+    ) {
         const response = await fetch("/graph.pdf");
         const arrayBuffer = await response.arrayBuffer();
         let graph = await PDFDocument.load(arrayBuffer);
@@ -37,11 +43,15 @@
             let page = oldDoc.getPage(i);
             let w = page.getWidth();
             let h = page.getHeight();
-            let scale = w / h;
-            page.scale(scale, scale);
-            page.setSize(h, w);
+            if (!original) {
+                let scale = w / h;
+                page.scale(scale, scale);
+                page.setSize(h, w);
+            } else {
+                page.setSize(w * 2, h);
+            }
             if (left) {
-                page.translateContent(h / 2, 0);
+                page.translateContent(original ? w : h / 2, 0);
                 /*page.node
                     .Annots()
                     ?.asArray()
@@ -67,11 +77,16 @@
         return oldDoc;
     }
 
-    async function updateBlob(contentx, left: boolean, graphing: boolean) {
+    async function updateBlob(
+        contentx,
+        left: boolean,
+        graphing: boolean,
+        original: boolean,
+    ) {
         if (contentx == "") return;
         let doc = await PDFDocument.load(contentx);
         progress = 10;
-        let oldDoc = await flip(doc, left, graphing);
+        let oldDoc = await flip(doc, left, graphing, original);
 
         let bytes = new Uint8Array(await oldDoc.save());
         progress = 100;
@@ -116,6 +131,11 @@
     <input id="graph" bind:checked={includeGraph} type="checkbox" />
     <span style="margin-top: auto; margin-bottom: auto"
         >Include Graphing Paper</span
+    > <br />
+
+    <input id="original" bind:checked={keepOriginal} type="checkbox" />
+    <span style="margin-top: auto; margin-bottom: auto"
+        >Keep Original Size (A4 to A3)</span
     >
 </div>
 <div class="button-bar">
@@ -139,7 +159,7 @@
     style="position: relative
         ;margin-left: 30px;
         width: 80vh;
-        height: 60vh; max-width: 100%"
+        height: 55vh; max-width: 100%"
 >
     {#if src != ""}
         <iframe
